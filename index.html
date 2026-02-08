@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Predix - BETA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body {
+      height: 100vh;
+    }
+
+    .drawer-content {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    main {
+      overflow-y: auto;
+      flex: 1;
+    }
+  </style>
+</head>
+
+<body class="bg-base-200" x-data="appState()" x-init="init()">
+
+  <!-- Loading Overlay -->
+  <div x-show="isLoading"
+    class="fixed inset-0 z-50 bg-white flex items-center justify-center transition-opacity duration-500"
+    x-transition:leave="opacity-0" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+    <img src="medias/logo.gif" alt="Loading..." class="w-32 h-32 object-contain" />
+  </div>
+  <div class="drawer drawer-mobile">
+    <input id="drawer" type="checkbox" class="drawer-toggle" />
+    <div class="drawer-content flex flex-col">
+      <header class="w-full navbar bg-base-100 shadow-sm">
+        <div class="flex-1 px-4">
+          <label for="drawer" class="btn btn-ghost btn-square lg:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </label>
+          <span class="text-lg font-bold">Predix</span>
+        </div>
+        <div class="flex-none">
+          <button @click="startAnalysis()" class="btn btn-sm btn-primary">Nouvelle analyse</button>
+        </div>
+      </header>
+
+      <!-- Offline Banner -->
+      <div x-show="!isOnline" class="bg-error text-error-content px-4 py-2 text-center text-sm font-bold"
+        style="display: none;">
+        ⚠️ Pas de connexion internet. Les analyses et l'ajout de tickets sont désactivés.
+      </div>
+
+      <main class="p-6">
+        <!-- Dashboard -->
+        <div x-show="currentView === 'dashboard'">
+          <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div>
+              <h2 class="text-3xl font-bold">Dashboard</h2>
+              <div x-show="settings.first_name" class="text-lg opacity-70 mt-1">
+                Bonjour, <span x-text="settings.first_name"></span> 👋
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="text-sm opacity-70">Trier par:</span>
+              <select x-model="sortOption" class="select select-bordered select-sm">
+                <option value="overall">Score Global</option>
+                <option value="technical">Score Technique</option>
+                <option value="ai_tech">Score AI Tech</option>
+                <option value="current">Récents</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="ticket in getDashboardTickets()" :key="ticket.name">
+              <div class="card bg-base-100 shadow-xl transition-all hover:scale-[1.02] border-t-4" :class="{
+                     'border-success': ticket.score >= 70,
+                     'border-error': ticket.score > 0 && ticket.score <= 30,
+                     'border-transparent': ticket.score > 30 && ticket.score < 70 || ticket.score === -1
+                   }">
+                <div class="card-body p-5">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <div class="text-2xl font-bold flex items-center gap-2">
+                        <span x-text="ticket.name"></span>
+                        <template x-if="ticket.score >= 80">
+                          <span class="badge badge-success gap-1 text-xs">🚀 Top</span>
+                        </template>
+                        <template x-if="ticket.score > 0 && ticket.score <= 20">
+                          <span class="badge badge-error gap-1 text-xs">💀 Flop</span>
+                        </template>
+                      </div>
+                      <div class="text-xs opacity-70 mt-1"
+                        x-text="'Dernière: ' + formatDate(ticket.lastAnalysis?.created)"></div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-4xl font-black" :class="{
+                                'text-success': ticket.score >= 60,
+                                'text-error': ticket.score > 0 && ticket.score <= 40,
+                                'text-base-content': ticket.score > 40 && ticket.score < 60
+                             }" x-text="ticket.score > -1 ? ticket.score : '-'"></div>
+                      <div class="text-xs opacity-60 uppercase font-bold tracking-wider">Score</div>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 grid grid-cols-2 gap-2 text-xs opacity-80">
+                    <div class="flex justify-between bg-base-200 p-2 rounded">
+                      <span>Tech</span>
+                      <span class="font-mono font-bold" x-text="ticket.details?.indicators?.score || '-'"></span>
+                    </div>
+                    <div class="flex justify-between bg-base-200 p-2 rounded">
+                      <span>AI Tech</span>
+                      <span class="font-mono font-bold" x-text="ticket.details?.ai?.techScore || '-'"></span>
+                    </div>
+                  </div>
+
+                  <div class="card-actions justify-end mt-4">
+                    <button @click="openTicketDetails(ticket.name)" class="btn btn-sm btn-primary">Détails</button>
+                    <button @click="deleteTicket(ticket.name)" class="btn btn-sm btn-ghost text-error">Suppr</button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Tickets -->
+        <div x-show="currentView === 'tickets'">
+          <h2 class="text-2xl font-bold mb-4">Tickets</h2>
+          <div class="flex gap-2 mb-4">
+            <input x-model="newTicketName" type="text" class="input input-bordered flex-1"
+              placeholder="BTC, ETH, AAPL..." />
+            <button @click="addTicket()" class="btn btn-primary">Ajouter</button>
+          </div>
+          <div class="space-y-3">
+            <template x-for="ticket in tickets" :key="ticket.name">
+              <div class="flex items-center justify-between p-3 bg-base-100 rounded">
+                <div>
+                  <div class="font-bold" x-text="ticket.name"></div>
+                  <div class="text-sm opacity-60" x-text="formatDate(ticket.created)"></div>
+                </div>
+                <div class="flex gap-2">
+                  <button @click="openTicketDetails(ticket.name)" class="btn btn-sm">Voir</button>
+                  <button @click="deleteTicket(ticket.name)" class="btn btn-sm btn-ghost">Suppr</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div x-show="currentView === 'settings'">
+          <h2 class="text-2xl font-bold mb-4">Paramètres</h2>
+          <div class="space-y-4 max-w-xl">
+            <div>
+              <label class="label"><span class="label-text">Prénom</span></label>
+              <input x-model="settings.first_name" type="text" class="input input-bordered w-full" />
+            </div>
+            <div>
+              <label class="label"><span class="label-text">Nom</span></label>
+              <input x-model="settings.last_name" type="text" class="input input-bordered w-full" />
+            </div>
+            <div>
+              <label class="label"><span class="label-text">URL API LLM</span></label>
+              <input x-model="settings.llm_api_url" type="text" class="input input-bordered w-full" />
+            </div>
+            <div>
+              <label class="label"><span class="label-text">Modèle LLM</span></label>
+              <input x-model="settings.llm_model" type="text" class="input input-bordered w-full"
+                placeholder="ex: mistral" />
+            </div>
+
+            <div class="divider">AI Configuration</div>
+
+            <div class="form-control">
+              <label class="cursor-pointer label">
+                <span class="label-text">Activer l'analyse AI</span>
+                <input x-model="settings.ai_enabled" type="checkbox" class="toggle toggle-secondary" />
+              </label>
+            </div>
+
+            <div x-show="settings.ai_enabled" class="space-y-4 border p-4 rounded-lg bg-base-200">
+              <div class="form-control">
+                <label class="cursor-pointer label">
+                  <span class="label-text">Analyser aussi les indicateurs (AI Tech)</span>
+                  <input x-model="settings.ai_tech_enabled" type="checkbox" class="toggle toggle-sm" />
+                </label>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="label"><span class="label-text text-xs">Jours (News)</span></label>
+                  <input x-model="settings.news_days_limit" type="number"
+                    class="input input-sm input-bordered w-full" />
+                </div>
+                <div>
+                  <label class="label"><span class="label-text text-xs">Nombre Max (News)</span></label>
+                  <input x-model="settings.news_count_limit" type="number"
+                    class="input input-sm input-bordered w-full" />
+                </div>
+              </div>
+
+              <div class="divider text-xs">Pondération (Total = 1.0)</div>
+
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <label class="label"><span class="label-text text-xs">Tech</span></label>
+                  <input x-model="settings.weight_tech" type="number" step="0.1"
+                    class="input input-sm input-bordered w-full" />
+                </div>
+                <div>
+                  <label class="label"><span class="label-text text-xs">AI News</span></label>
+                  <input x-model="settings.weight_ai_news" type="number" step="0.1"
+                    class="input input-sm input-bordered w-full" />
+                </div>
+                <div>
+                  <label class="label"><span class="label-text text-xs">AI Tech</span></label>
+                  <input x-model="settings.weight_ai_tech" type="number" step="0.1"
+                    class="input input-sm input-bordered w-full" />
+                </div>
+              </div>
+            </div>
+            <div class="form-control">
+              <label class="cursor-pointer label">
+                <span class="label-text">Mises à jour temps réel</span>
+                <input x-model="settings.realtime_updates" type="checkbox" class="toggle toggle-primary" />
+              </label>
+            </div>
+            <button @click="saveSettings()" class="btn btn-primary">Enregistrer</button>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div x-show="currentView === 'history'">
+          <h2 class="text-2xl font-bold mb-4">Historique</h2>
+          <div class="space-y-2">
+            <template x-for="analysis in analyses" :key="analysis.id">
+              <div class="p-3 bg-base-100 rounded flex justify-between items-center">
+                <div>
+                  <div class="font-bold" x-text="analysis.ticket"></div>
+                  <div class="text-sm opacity-60" x-text="formatDate(analysis.created)"></div>
+                </div>
+                <div class="text-xl font-bold" x-text="analysis.score"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="drawer-side">
+      <label for="drawer" class="drawer-overlay"></label>
+      <aside class="menu p-4 w-64 bg-base-100">
+        <div class="mb-4">
+          <div class="font-bold text-lg">Navigation</div>
+        </div>
+        <ul class="menu">
+          <li><a @click="navigate('dashboard')" :class="{'active': currentView === 'dashboard'}">Dashboard</a></li>
+          <li><a @click="navigate('tickets')" :class="{'active': currentView === 'tickets'}">Tickets</a></li>
+          <li><a @click="navigate('history')" :class="{'active': currentView === 'history'}">Historique</a></li>
+          <li><a @click="navigate('settings')" :class="{'active': currentView === 'settings'}">Paramètres</a></li>
+        </ul>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Modal simple -->
+  <!-- Modal -->
+  <div x-show="modal.show" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-transition.opacity>
+    <div @click.stop
+      class="bg-base-100 rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto relative shadow-xl">
+      <h3 class="font-bold text-lg mb-4" :class="{'text-error': modal.isError}" x-text="modal.title"></h3>
+      <div x-html="modal.content" class="mb-6"></div>
+      <div class="flex gap-2 justify-end">
+        <button @click="closeModal()" class="btn">Ok</button>
+        <button x-show="modal.onConfirm" @click="modal.onConfirm()" class="btn btn-primary">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+
+</html>

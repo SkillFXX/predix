@@ -1,0 +1,22 @@
+{
+  "name": "predix",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "SkillFXX",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \\\"Error: no test specified\\\" && exit 1"
+  },
+  "devDependencies": {
+    "electron": "^40.2.1"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "lowdb": "^7.0.1",
+    "sql.js": "^1.13.0",
+    "axios": "^1.4.0"
+  }
+}
